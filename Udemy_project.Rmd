@@ -1,0 +1,544 @@
+---
+title: "Udemy_Project"
+output: html_notebook
+---
+
+
+```{r}
+library(readxl)
+library(dplyr)
+library(plyr)
+library(Hmisc)
+```
+
+#reading data
+```{r}
+df <- read_excel('Data_Extract_From_Enterprise_Surveys.xlsx')
+```
+
+#controlling data
+```{r}
+str(df)
+```
+#controlling data
+```{r}
+head(df)
+```
+#changing column names
+```{r}
+colnames(df)[1] <- "country"
+colnames(df)[2] <- "code"
+colnames(df)[3] <- "serie"
+colnames(df)[4] <- "seirsCode"
+```
+
+
+
+
+#turing some columns into rows
+```{r}
+library(reshape2)
+df <- melt(df,id.vars=c('country','code','serie'), measure.vars =c(colnames(df)[5:length(colnames(df))]))
+
+```
+#checking the data
+```{r}
+head(df)
+```
+
+
+#changing column name
+```{r}
+colnames(df)[4] <- "year"
+```
+
+
+#eliminating data where value column is nan
+```{r}
+df <- subset(df, subset = is.na(df$value) == F)
+```
+#checking the data
+```{r}
+sum(is.na(df$value))
+```
+
+#checking the data by looking number of countries
+```{r}
+count(df, "code")
+```
+#checking the data
+```{r}
+head(df, 20)
+```
+#checking the data
+```{r}
+tail(df)
+```
+#using a function to give nan values to ".."
+```{r}
+fillP <- function(x){
+  if (x=="..") {
+    return(NA)
+  } 
+  else {
+    return(as.numeric(x))
+  }
+  }
+df$value <- sapply(df$value, fillP)
+```
+
+#checking the data
+```{r}
+str(df)
+```
+
+#checking the data
+```{r}
+sum(is.na(df$country))
+sum(is.na(df$code))
+sum(is.na(df$year))
+sum(is.na(df$value) == F)
+```
+
+#pivoting the data
+```{r}
+df_p <- dcast(df, country + code + year ~ serie, value.var="value", fun.aggregate=sum)
+```
+#checking the data
+```{r}
+head(df_p)
+tail(df_p)
+```
+
+
+
+#creating a new dataframe by taking 'Percent of firms that spend on R&D' as reference
+```{r}
+df_m <- subset(df_p, subset = is.na(df_p['Percent of firms that spend on R&D'])==FALSE)
+head(df_m)
+```
+
+#number of unique countries
+```{r}
+length(unique(df_m$country))
+```
+#elimination those countries having more than one oberservation 
+```{r}
+for (i in unique(df_m$country)){
+  d <- subset(df_m, subset = df_m$country == i)
+  if (nrow(d) > 1){
+    d <- tail(d, 1)
+    df_m <- subset(df_m, subset = df_m$country != i)
+    df_m <- rbind(df_m, d) 
+  }
+}
+
+df_m
+```
+
+```{r}
+tail(df_m, 10)
+```
+```{r}
+subset(df_m, subset = df_m$country == "Albania")
+```
+#dropping a column bcz of missing values
+```{r}
+df_m['Percent of firms using e-mail to interact with clients/suppliers'] <- NULL
+```
+
+#the number rows in case dropping all nan values
+```{r}
+nrow(na.omit(df_m))
+
+```
+
+#corr table for 'Percent of firms that spend on R&D' 
+```{r}
+nums <- unlist(lapply(df_m, is.numeric)) 
+mydata.rcorr <- rcorr(as.matrix(df_m[,nums]))
+c <- as.data.frame(mydata.rcorr$r)
+c[order(c["Percent of firms that spend on R&D"]),]["Percent of firms that spend on R&D"]
+
+
+```
+
+#variable list for the model based on corr table
+```{r}
+model.list <- c("country","code",
+                "Percent of firms with at least 10% of foreign ownership",
+                "Percent of firms with an internationally-recognized quality certification",
+                "Percent of firms with female participation in ownership",
+                "Percent of firms having their own Web site",
+                "Percent of firms offering formal training",
+                "Proportion of investment financed by banks (%)",
+                "Proportion of private domestic ownership in a firm (%)",
+                "Percent of firms expected to give gifts in meetings with tax officials",
+                "Percent of firms competing against unregistered or informal firms",
+                "Percent of firms that spend on R&D")
+```
+
+#model dataframe
+```{r}
+df_m <- df_m[model.list]
+colnames(df_m)[3:length(colnames(df_m))] <- c("foreign","certi","fOwn","web","train", "bank","dOwn","tax","informal","rd")
+head(df_m)
+```
+#checking the data
+```{r}
+summary(df_m)
+```
+#checking the data
+```{r}
+str(df_m)
+```
+
+#historgrams for each variables
+```{r}
+
+for (i in colnames(df_m)[3:length(colnames(df_m))]){
+  hist(df_m[,i], main = i, xlab = i)
+
+  
+}
+```
+#scatter plot for each variables
+```{r}
+
+for (i in colnames(df_m)[3:length(colnames(df_m))]){
+  scatter.smooth(df_m[,i], df_m[,"rd"], main = i, xlab = i)
+
+  
+}
+```
+
+#dealing with outliers
+```{r}
+subset(df_m, subset = df_m$informal > 80)
+```
+#dealing with outliers
+```{r}
+subset(df_m, subset = df_m$rd > 45)
+```
+#dealing with outliers
+```{r}
+df_m <- subset(df_m, subset = df_m$rd < 45)
+df_m <- subset(df_m, subset = df_m$foreign < 60)
+df_m <- subset(df_m, subset = df_m$certi < 50)
+df_m <- subset(df_m, subset = df_m$dOwn > 50)
+df_m <- subset(df_m, subset = df_m$tax < 50)
+df_m <- subset(df_m, subset = df_m$informal < 85)
+```
+
+```{r}
+head(df_m)
+```
+#scatter plot for each variables
+```{r}
+for (i in colnames(df_m)[3:length(colnames(df_m))]){
+  scatter.smooth(df_m[,i], df_m[,"rd"], main = i, xlab = i)
+}
+```
+
+
+#showing there is no any missing values
+```{r}
+nrow(na.omit(df_m))
+nrow((df_m))
+```
+
+#corr matrix
+```{r}
+library(corrgram)
+corrgram(df_m,order=TRUE, lower.panel=panel.shade,
+  upper.panel=panel.pie, text.panel=panel.txt)
+```
+#corr matrix
+```{r}
+nums <- unlist(lapply(df_m, is.numeric)) 
+mydata.rcorr <- rcorr(as.matrix(df_m[,nums]))
+c <- as.data.frame(mydata.rcorr$r)
+c
+```
+#there are high correaltion between foreing & dOwn, certi & web.
+
+
+
+
+
+
+#simple regression for each variables with Percent of firms that spend on R&D
+```{r}
+for (i in colnames(df_m)[3:(length(colnames(df_m))-1)]){
+  model <- lm(rd ~ ., df_m[c("rd",i)])
+  print(summary(model))
+}
+
+```
+#lineral model with all variables
+```{r}
+model <- lm(rd ~ ., subset(df_m, select = -c(country, code)))
+summary(model)
+```
+#linear model by dropping web dOwn variables based on corr table
+```{r}
+model <- lm(rd ~ ., subset(df_m, select = -c(country, code, web, dOwn)))
+summary(model)
+```
+#histogram for residuals
+```{r}
+
+res <- residuals(model)
+
+
+res <- as.data.frame(res)
+
+
+ggplot(res,aes(res)) +  geom_histogram(fill='blue',alpha=0.5)
+```
+plots for residuals
+```{r}
+plot(model)
+```
+#splitting data into train test datas
+```{r}
+#
+library(caTools)
+
+set.seed(101) 
+
+
+sample <- sample.split(df_m$rd, SplitRatio = 0.85) 
+
+train = subset(subset(df_m, select = -c(country, code, web, dOwn)), sample == TRUE)
+
+test = subset(subset(df_m, select =-c(country, code, web, dOwn)), sample == FALSE)
+```
+#training linear model
+```{r}
+model <- lm(rd ~ .,train)
+r.predictions <- predict(model,test)
+```
+
+#predicting besed on test datas
+```{r}
+results <- cbind(r.predictions,test$rd) 
+colnames(results) <- c('pred','real')
+results <- as.data.frame(results)
+```
+#dealing with zero values
+```{r}
+to_zero <- function(x){
+    if  (x < 0){
+        return(0)
+    }else{
+        return(x)
+    }
+}
+results$pred <- sapply(results$pred,to_zero)
+
+```
+
+#calculatinng mean squarted error
+```{r}
+mse <- mean((results$real-results$pred)^2)
+print(mse)
+```
+#calculatinng coefficient of determination
+```{r}
+SSE = sum((results$pred - results$real)^2)
+SST = sum( (mean(df_m$rd) - results$real)^2)
+
+R2 = 1 - SSE/SST
+R2
+```
+#appling random forest model
+```{r}
+library(randomForest)
+model <- randomForest(rd ~ .,train,mportance = TRUE, na.action = na.omit) ##training  model
+model
+r.predictions <- predict(model,test)  #predicting besed on test datas
+results <- cbind(r.predictions,test$rd) 
+colnames(results) <- c('pred','real')
+results <- as.data.frame(results)
+to_zero <- function(x){   #dealing with zero values
+    if  (x < 0){
+        return(0)
+    }else{
+        return(x)
+    }
+}
+results$pred <- sapply(results$pred,to_zero)
+mse <- mean((results$real-results$pred)^2)    #calculatinng mean squarted error
+print(mse)
+SSE = sum((results$pred - results$real)^2)   #calculatinng coefficient of determination
+SST = sum( (mean(df_m$rd) - results$real)^2)
+
+R2 = 1 - SSE/SST
+R2
+```
+#showing which variable is important based on random forest model. 
+```{r}
+importance(model)
+```
+
+
+#clustring based on explanatory variables (5 cluster)
+```{r}
+km_5 <- kmeans( subset(df_m, select = -c(country, code, web, dOwn)), 5,nstart = 10)
+
+```
+#clustring based on explanatory variables (7 cluster)
+```{r}
+km_7 <- kmeans( subset(df_m, select = -c(country, code, web, dOwn)), 7, nstart = 10)
+```
+#adding predicted cluster to dataframe
+```{r}
+df_m["k5"] <- km_5$cluster
+df_m["k7"] <- km_7$cluster
+```
+
+#visualization of clusters
+```{r}
+library(cluster) 
+clusplot(df_m, df_m$k5, color=TRUE, shade=TRUE, labels=0,lines=0, )
+clusplot(df_m, df_m$k7, color=TRUE, shade=TRUE, labels=0,lines=0, )
+```
+```{r}
+library(tidyr)
+library(grid) 
+library(rworldmap)
+library(mapproj)
+```
+
+```{r}
+df_m
+#join(df_m, as.data.frame(worldMap$NAME),type ='right', by = worldMap$NAME )
+```
+
+#world map based on Percent of firms that spend on R&D variable
+```{r}
+worldMap<-getMap() # worldmap laden
+
+mf <- merge(df_m, as.data.frame(worldMap$ISO_A3),  by.x = 'code', by.y = "worldMap$ISO_A3", sort = TRUE,all.y=TRUE )
+m <-  which(worldMap$ISO_A3%in%mf$code)
+
+Coords <- lapply(m, function(i){
+  f <- data.frame(worldMap@polygons[[i]]@Polygons[[1]]@coords)
+  f$region =as.character(worldMap$ISO_A3[i])
+  colnames(f) <- list("long", "lat", "region")
+  return(f)
+})
+
+Coords <- do.call("rbind", Coords)
+
+tw <- data.frame(country = mf$code, value = mf$rd)
+Coords$value2014 <- tw$value[match(Coords$region,tw$country)]
+
+mp <- ggplot() + geom_polygon(data = Coords, aes(x = long, y = lat, group = region, fill = value2014),
+                             colour = "black", size = 0.1) 
+  #coord_map(xlim = c(-13, 35),  ylim = c(32, 71))
+            
+
+mp <- mp + scale_fill_gradient2(name = "R&D", low = "coral", mid="white", high = "blue", midpoint=20, space="Lab", na.value = "grey50")
+
+
+mp <- mp + theme(#panel.grid.minor = element_line(colour = NA), panel.grid.minor = element_line(colour = NA),
+               #panel.background = element_rect(fill = NA, colour = NA),
+               axis.text.x = element_blank(),
+               axis.text.y = element_blank(), axis.ticks.x = element_blank(),
+               axis.ticks.y = element_blank(), axis.title = element_blank(),
+               #rect = element_blank(),
+               plot.margin = unit(0 * c(-1.5, -1.5, -1.5, -1.5), "lines"))
+mp
+```
+#world map based on clusters
+```{r}
+worldMap<-getMap() # worldmap laden
+
+mf <- merge(df_m, as.data.frame(worldMap$ISO_A3),  by.x = 'code', by.y = "worldMap$ISO_A3", sort = TRUE,all.y=TRUE )
+m <-  which(worldMap$ISO_A3%in%mf$code)
+
+Coords <- lapply(m, function(i){
+  f <- data.frame(worldMap@polygons[[i]]@Polygons[[1]]@coords)
+  f$region =as.character(worldMap$ISO_A3[i])
+  colnames(f) <- list("long", "lat", "region")
+  return(f)
+})
+
+Coords <- do.call("rbind", Coords)
+
+tw <- data.frame(country = mf$code, value = mf$k5)
+Coords$value <- tw$value[match(Coords$region,tw$country)]
+
+mp <- ggplot() + geom_polygon(data = Coords, aes(x = long, y = lat, group = region, fill = value),
+                             colour = "black", size = 0.1) 
+  #coord_map(xlim = c(-13, 35),  ylim = c(32, 71))
+            
+
+mp <- mp + scale_fill_gradient2(name = "Clusters", low = "red", mid="white", high = "blue", space="Lab", na.value = "grey50", midpoint = 3)
+
+
+mp <- mp + theme(#panel.grid.minor = element_line(colour = NA), panel.grid.minor = element_line(colour = NA),
+               #panel.background = element_rect(fill = NA, colour = NA),
+               axis.text.x = element_blank(),
+               axis.text.y = element_blank(), axis.ticks.x = element_blank(),
+               axis.ticks.y = element_blank(), axis.title = element_blank(),
+               #rect = element_blank(),
+               #plot.margin = unit(0 * c(-1.5, -1.5, -1.5, -1.5), "lines")
+               )
+mp
+```
+
+
+
+#making  a new dataframe for neural network
+```{r}
+df_m <- na.omit(df_m)
+df_n <- subset(df_m, select = -c(country, code, k5,k7, dOwn, web))
+```
+#making formula based on column names for the model
+```{r}
+n <- names(df_n)
+ as.formula(paste("rd ~", paste(n[!n %in% "rd"], collapse = " + ")))
+```
+#finding max and mins for each cloumn
+```{r}
+maxs <- apply(df_n, 2, max) 
+mins <- apply(df_n, 2, min)
+```
+#scaling columns
+```{r}
+scaled <- as.data.frame(scale(df_n, center = mins, scale = maxs - mins))
+```
+#splitting dataset
+```{r}
+split = sample.split(scaled$rd, SplitRatio = 0.90)
+
+train = subset(scaled, split == TRUE)
+test = subset(scaled, split == FALSE)
+```
+
+#training model
+```{r}
+library(neuralnet)
+n <- names(train)
+f <- as.formula(paste("rd ~", paste(n[!n %in% "rd"], collapse = " + ")))
+model <- neuralnet(f,data=train,hidden=c(5,3),linear.output=TRUE)
+
+```
+
+#predicting and plotting predicted and real values
+```{r}
+predicted.nn.values <- compute(model, test[1:(length(test)-1)])
+true.predictions <- predicted.nn.values$net.result*(max(df_n$rd)-min(df_n$rd))+min(df_n$rd)
+test.r <- (test$rd)*(max(df_n$rd)-min(df_n$rd))+min(df_n$rd)
+error.df <- data.frame(test.r,true.predictions)
+ggplot(error.df,aes(x=test.r,y=true.predictions)) + geom_point() + stat_smooth(method = "lm")
+```
+
+
+
+
+
+
