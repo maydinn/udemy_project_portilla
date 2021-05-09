@@ -11,9 +11,11 @@ In this repository, you will find the following two analyses; the determinant fa
 
 for the countries
 
-2) Data; World Bank Enterprise Survey
+Data; 
 
-some 
+World Bank Enterprise Survey
+
+some used methods;
 
 python;
 
